@@ -1,0 +1,394 @@
+---
+title: "Avances,Lab1"
+author: 'Andrés Mazariegos baby toilet, Daniel Sarmiento '
+date: "2026-02-02"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+editor_options:
+  markdown:
+    wrap: sentence
+---
+```{r}
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(stringr)
+```
+
+
+$$Andres\ Mazariego\\ baby \ toilet $$
+
+
+1.  (3 puntos) Haga una exploración rápida de sus datos, para eso haga un resumen de su conjunto
+
+    de datos.
+
+```{r 1}
+##Leemos la data y lo asignamos a una variable 
+movies <- read.csv("movies_2026.csv",fileEncoding = "UTF-8-BOM")
+##el nombre de las columnas 
+colnames(movies )
+
+##summary
+summary(movies)
+str(movies)
+```
+
+2.  (5 puntos) Diga el tipo de cada una de las variables (cualitativa ordinal o nominal, cuantitativa continua, cuantitativa discreta
+
+```{r 2}
+
+
+clasificacion_variables <- data.frame(
+  Variable = c(
+    "id", "budget", "genres", "homePage", "productionCompany", 
+    "productionCompanyCountry", "productionCountry", "revenue", "runtime", "video", 
+    "director", "actors", "actorsPopularity", "actorsCharacter", "originalTitle", 
+    "title", "originalLanguage", "popularity", "releaseDate", "voteAvg", 
+    "voteCount", "genresAmount", "productionCoAmount", "productionCountriesAmount", "actorsAmount", 
+    "castWomenAmount", "castMenAmount", "releaseYear"
+  ),
+  Tipo = c(
+    "Cualitativa categórica (ID)", "Cuantitativa continua", "Cualitativa categórica", "Cualitativa categórica", "Cualitativa categórica",
+    "Cualitativa categórica", "Cualitativa categórica", "Cuantitativa continua", "Cuantitativa continua", "Cualitativa categórica (binaria)",
+    "Cualitativa categórica", "Cualitativa categórica", "Cualitativa categórica", "Cualitativa categórica", "Cualitativa categórica",
+    "Cualitativa categórica", "Cualitativa categórica", "Cuantitativa continua", "Cualitativa categórica", "Cuantitativa continua",
+    "Cuantitativa discreta", "Cuantitativa discreta", "Cuantitativa discreta", "Cuantitativa discreta", "Cuantitativa discreta",
+    "Cuantitativa discreta", "Cuantitativa discreta", "Cuantitativa discreta"
+  ),
+  stringsAsFactors = FALSE
+)
+
+# Para visualizar la tabla completa
+print(clasificacion_variables)
+
+
+```
+3. (6 puntos) Investigue si las variables cuantitativas siguen una distribución normal y haga una
+tabla de frecuencias de las variables cualitativas. Explique todos los resultados.
+
+
+a)Variables Cualitativas 
+
+```{r 3}
+
+
+# 1) Seleccionar únicamente las columnas numéricas (cuantitativas)
+# sapply(movies_2026, is.numeric) devuelve TRUE/FALSE por columna
+# y con eso filtramos las columnas numéricas.
+vars_num <- movies[, sapply(movies, is.numeric)]
+
+# 2) Crear una tabla donde guardaremos los resultados
+# variable: nombre de la columna
+# n: cantidad de valores NO-NA (datos válidos) que tiene esa variable
+# p_value: valor p del test de Shapiro–Wilk
+# normal: TRUE si p_value > 0.05, FALSE si p_value <= 0.05
+normalidad <- data.frame(
+  variable = names(vars_num),
+  n = NA,
+  p_value = NA,
+  normal = NA
+)
+
+# 3) Fijar una semilla para reproducibilidad
+# Esto hace que sample() seleccione siempre la misma muestra si vuelves a correr el script.
+set.seed(1)
+
+# 4) Recorrer cada variable numérica y aplicar el test
+for (i in seq_along(vars_num)) {
+
+  # 4.1) Tomar la columna i y quitar NAs
+  # na.omit elimina valores faltantes para evitar errores en la prueba
+  x <- na.omit(vars_num[[i]])
+
+  # Guardar cuántos datos válidos tiene la variable (antes de muestrear)
+  normalidad$n[i] <- length(x)
+
+  # 4.2) Validaciones mínimas antes de correr Shapiro
+  # - Shapiro necesita al menos 3 observaciones
+  if (length(x) < 3) next
+
+  # - Si todos los valores son iguales (varianza = 0), no tiene sentido probar normalidad
+  #   porque no hay distribución "real" que evaluar
+  if (length(unique(x)) < 2) next
+
+  # 4.3) Shapiro–Wilk solo permite hasta 5000 observaciones
+  # Si hay más, tomamos una muestra aleatoria de 5000 para poder correr el test
+  if (length(x) > 5000) {
+    x <- sample(x, 5000)
+  }
+
+  # 4.4) Ejecutar Shapiro de forma segura
+  # tryCatch evita que el script se detenga si una variable causa error
+  out <- tryCatch(
+    shapiro.test(x),
+    error = function(e) NULL
+  )
+
+  # 4.5) Si la prueba se ejecutó bien, guardamos resultados
+  if (!is.null(out)) {
+
+    # Guardar valor p del test
+    normalidad$p_value[i] <- out$p.value
+
+    # Decisión simple:
+    # p_value > 0.05  -> "compatible con normalidad" (no rechazo H0)
+    # p_value <= 0.05 -> "no normal" (rechazo H0)
+    normalidad$normal[i] <- out$p.value > 0.05
+  }
+}
+
+# 5) Mostrar la tabla final con resultados de normalidad
+normalidad
+```
+Para evaluar si las variables cuantitativas del conjunto de datos siguen una distribución normal, se aplicó la prueba de Shapiro–Wilk a cada una de ellas. Dado el tamaño de la muestra,  se utilizó una submuestra aleatoria de 5000 valores, garantizando la reproducibilidad del análisis.
+
+Los resultados indican que todas las variables cuantitativas no siguen una distribución normal (p ≤ 0.05). Este comportamiento es especialmente evidente en las variables relacionadas con conteos y montos económicos, las cuales presentan distribuciones asimétricas con colas largas hacia la derecha. Algunas variables continuas, como la duración de las películas o el promedio de votos, muestran un comportamiento más cercano a la normalidad, aunque no completamente normal debido a la presencia de valores extremos y a la alta variabilidad de los datos.
+
+Debido a su naturaleza discreta y asimétrica, no es apropiado asumir normalidad para las variables de conteo, por lo que en análisis posteriores es recomendable emplear métodos no paramétricos o transformaciones adecuadas de los datos.
+
+
+b)Variables Cualitativas 
+```{r 4}
+#3b. Tablas de Frecuencia (Variables Cualitativas)
+
+cat("\n--- Tablas de Frecuencia\n")
+
+# Frecuencia de video (Booleano)
+cat("\nVariable: video\n")
+print(table(movies$video))
+
+# Frecuencia de originalLanguage 
+cat("\nVariable: originalLanguage (Top 10)\n")
+print(head(sort(table(movies$originalLanguage), decreasing = TRUE), 10))
+
+# Frecuencia de genres
+cat("\nVariable: genres (Top 10 combinaciones)\n")
+print(head(sort(table(movies$genres), decreasing = TRUE), 10))
+
+
+```
+
+
+$$4. \ Responda\ las\ siguientes\ preguntas:$$
+
+$4.1 \\ —\\ Top \\10\\ \\películas\\ \\con\\ \\más\\ \\presupuesto\\$ 
+
+```{r}
+movies2 <- movies %>%
+  mutate(
+    # Convertir a numérico (maneja comas/dólares si existieran)
+    budget   = as.numeric(gsub("[^0-9.]", "", as.character(budget))),
+    revenue  = as.numeric(gsub("[^0-9.]", "", as.character(revenue))),
+    runtime  = as.numeric(gsub("[^0-9.]", "", as.character(runtime))),
+    voteAvg  = as.numeric(gsub("[^0-9.]", "", as.character(voteAvg))),
+    voteCount= as.numeric(gsub("[^0-9.]", "", as.character(voteCount))),
+    actorsAmount = as.numeric(gsub("[^0-9.]", "", as.character(actorsAmount))),
+    releaseYear  = as.numeric(gsub("[^0-9]", "", as.character(releaseYear))),
+    
+    # Fecha (por si releaseDate viene tipo "YYYY-MM-DD")
+    releaseDate = suppressWarnings(ymd(releaseDate))
+  )
+
+top10_budget <- movies2 %>%
+  filter(!is.na(budget)) %>%
+  arrange(desc(budget)) %>%
+  slice_head(n = 10) %>%
+  select(id, title, originalTitle, budget, releaseYear, genres, director)
+
+top10_budget
+
+
+```
+
+$4.2 \\ — \\ Top\\ 10 \\películas \\con\\ más\\ ingresos\\ (\ revenue \ )$ 
+
+```{r}
+top10_revenue <- movies2 %>%
+  filter(!is.na(revenue)) %>%
+  arrange(desc(revenue)) %>%
+  slice_head(n = 10) %>%
+  select(id, title, originalTitle, revenue, releaseYear, genres, director)
+
+top10_revenue
+```
+
+$4.3 \\ — \\Película\\ con\\ más \\votos\\ ( \ voteCount \ )$
+
+```{r}
+most_votes <- movies2 %>%
+  filter(!is.na(voteCount)) %>%
+  arrange(desc(voteCount)) %>%
+  slice_head(n = 1) %>%
+  select(id, title, originalTitle, voteCount, voteAvg, releaseYear, genres)
+
+most_votes
+```
+
+$4.4 \\ — \\ Peor \\ película \\ según \\ votos \\ ( \ voteAvg \ más bajo \ )$
+
+```{r}
+worst_movie <- movies2 %>%
+  filter(!is.na(voteAvg)) %>%
+  arrange(voteAvg, desc(voteCount)) %>%
+  slice_head(n = 1) %>%
+  select(id, title, originalTitle, voteAvg, voteCount, releaseYear, genres)
+
+worst_movie
+```
+$\\4.5\\ — \\ # \\ películas \\ por \\ año \\ + \\ año \\ con \\ más \\ películas \\ + \\ gráfico \\ de \\ barras \\ $
+
+```{r}
+movies_per_year <- movies2 %>%
+  filter(!is.na(releaseYear)) %>%
+  count(releaseYear, name = "n_movies") %>%
+  arrange(releaseYear)
+
+movies_per_year
+
+year_most_movies <- movies_per_year %>%
+  arrange(desc(n_movies)) %>%
+  slice_head(n = 1)
+
+year_most_movies
+
+ggplot(movies_per_year, aes(x = factor(releaseYear), y = n_movies)) +
+  geom_bar(stat = "identity") +
+  labs(
+    title = "Cantidad de películas por año",
+    x = "Año de lanzamiento",
+    y = "Número de películas"
+  ) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+```
+
+$4.6 \\ — \\ Género principal \\ de \\ las \\ 20 \\ más \\ recientes \\ + \\ género \\ que \\ predomina \\ + \\ gráfico$
+
+```{r}
+movies2 <- movies2 %>%
+  mutate(
+    mainGenre = ifelse(
+      is.na(genres), NA,
+      str_trim(str_split_fixed(as.character(genres), "\\||,", 2)[,1])
+    )
+  )
+
+# 20 más recientes por releaseDate (si falta, usa releaseYear)
+recent20 <- movies2 %>%
+  mutate(order_date = ifelse(!is.na(releaseDate), as.numeric(releaseDate), NA_real_)) %>%
+  arrange(desc(releaseDate), desc(releaseYear)) %>%
+  slice_head(n = 20) %>%
+  select(id, title, releaseDate, releaseYear, mainGenre)
+
+recent20
+
+# Distribución de género principal en todo el dataset
+genre_counts <- movies2 %>%
+  filter(!is.na(mainGenre)) %>%
+  count(mainGenre, name = "n_movies") %>%
+  arrange(desc(n_movies))
+
+genre_counts
+
+dominant_genre <- genre_counts %>% slice_head(n = 1)
+dominant_genre
+
+ggplot(genre_counts %>% slice_head(n = 15), aes(x = reorder(mainGenre, n_movies), y = n_movies)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(
+    title = "Top 15 géneros principales más frecuentes",
+    x = "Género principal",
+    y = "Número de películas"
+  )
+
+# ¿A qué género pertenecen las películas más largas?
+# (Top 20 por runtime y revisamos su género principal)
+longest_movies <- movies2 %>%
+  filter(!is.na(runtime), !is.na(mainGenre)) %>%
+  arrange(desc(runtime)) %>%
+  slice_head(n = 20) %>%
+  select(id, title, runtime, mainGenre, releaseYear)
+
+longest_movies
+
+longest_genre_summary <- longest_movies %>%
+  count(mainGenre, name = "n_in_top20_longest") %>%
+  arrange(desc(n_in_top20_longest))
+
+longest_genre_summary
+```
+
+$4.7 \\ — \\ \\ ¿Qué \\ género \\ principal \\ obtuvo \\ mayores \\ ganancias \\ ? \\$
+
+```{r}
+genre_profit <- movies2 %>%
+  filter(!is.na(mainGenre), !is.na(revenue)) %>%
+  group_by(mainGenre) %>%
+  summarise(
+    n = n(),
+    avg_revenue = mean(revenue, na.rm = TRUE),
+    med_revenue = median(revenue, na.rm = TRUE)
+  ) %>%
+  arrange(desc(avg_revenue))
+
+genre_profit
+
+top_genre_by_avg_rev <- genre_profit %>% slice_head(n = 1)
+top_genre_by_avg_rev
+
+ggplot(genre_profit %>% filter(n >= 30) %>% slice_head(n = 15),
+       aes(x = reorder(mainGenre, avg_revenue), y = avg_revenue)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(
+    title = "Top 15 géneros por ingreso promedio (filtrado: n>=30)",
+    x = "Género principal",
+    y = "Ingreso promedio (revenue)"
+  )
+```
+$\\4.8\\ — \\ ¿actorsAmount \\ influye \\ en \\ revenue? $
+
+```{r}
+# (a) Relación actorsAmount vs revenue: correlación + scatter
+actors_rev <- movies2 %>%
+  filter(!is.na(actorsAmount), !is.na(revenue), actorsAmount > 0, revenue >= 0)
+
+cor_actors_revenue <- cor(actors_rev$actorsAmount, actors_rev$revenue, use = "complete.obs")
+cor_actors_revenue
+
+ggplot(actors_rev, aes(x = actorsAmount, y = revenue)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "lm", se = TRUE) +
+  labs(
+    title = "Relación entre cantidad de actores e ingresos",
+    x = "Cantidad de actores (actorsAmount)",
+    y = "Ingresos (revenue)"
+  )
+
+# (b) ¿Más actores en los últimos años? tendencia por año (promedio actores por releaseYear)
+actors_by_year <- movies2 %>%
+  filter(!is.na(releaseYear), !is.na(actorsAmount)) %>%
+  group_by(releaseYear) %>%
+  summarise(
+    n_movies = n(),
+    avg_actors = mean(actorsAmount, na.rm = TRUE),
+    med_actors = median(actorsAmount, na.rm = TRUE)
+  ) %>%
+  arrange(releaseYear)
+
+actors_by_year
+
+ggplot(actors_by_year, aes(x = releaseYear, y = avg_actors)) +
+  geom_line() +
+  geom_point() +
+  labs(
+    title = "Promedio de actores por año",
+    x = "Año",
+    y = "Promedio de actores (actorsAmount)"
+  )
+```
+
+
