@@ -1,0 +1,754 @@
+---
+title: "Entrega Final"
+author: "Andrés Mazariegos, Daniel Sarmiento"
+date: "2026-02-02"
+output:
+  pdf_document:
+    latex_engine: xelatex
+  html_document: default
+  word_document: default
+header-includes:
+  - \usepackage{fontspec}
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+#GITHUB
+
+#https://github.com/andresm220/Lab1Mineria
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(stringr)
+library(tinytex)
+```
+
+Andres\ Mazariegos\\ y \ Daniel \ Sarmiento 
+
+1.-  Haga  una  exploración  rápida  de  sus  datos
+
+```{r 1}
+##Leemos la data y lo asignamos a una variable 
+movies <- read.csv("movies_2026.csv",fileEncoding = "UTF-8-BOM")
+##el nombre de las columnas 
+colnames(movies )
+
+##summary
+summary(movies)
+str(movies)
+```
+
+2.-  Diga  el  tipo  de  cada  una  de  las  variables 
+
+```{r 2}
+
+
+clasificacion_variables <- data.frame(
+  Variable = c(
+    "id", "budget", "genres", "homePage", "productionCompany", 
+    "productionCompanyCountry", "productionCountry", "revenue", "runtime", "video", 
+    "director", "actors", "actorsPopularity", "actorsCharacter", "originalTitle", 
+    "title", "originalLanguage", "popularity", "releaseDate", "voteAvg", 
+    "voteCount", "genresAmount", "productionCoAmount", "productionCountriesAmount", "actorsAmount", 
+    "castWomenAmount", "castMenAmount", "releaseYear"
+  ),
+  Tipo = c(
+    "Cualitativa categórica (ID)", "Cuantitativa continua", "Cualitativa categórica", "Cualitativa categórica", "Cualitativa categórica",
+    "Cualitativa categórica", "Cualitativa categórica", "Cuantitativa continua", "Cuantitativa continua", "Cualitativa categórica (binaria)",
+    "Cualitativa categórica", "Cualitativa categórica", "Cualitativa categórica", "Cualitativa categórica", "Cualitativa categórica",
+    "Cualitativa categórica", "Cualitativa categórica", "Cuantitativa continua", "Cualitativa categórica", "Cuantitativa continua",
+    "Cuantitativa discreta", "Cuantitativa discreta", "Cuantitativa discreta", "Cuantitativa discreta", "Cuantitativa discreta",
+    "Cuantitativa discreta", "Cuantitativa discreta", "Cuantitativa discreta"
+  ),
+  stringsAsFactors = FALSE
+)
+
+# Para visualizar la tabla completa
+print(clasificacion_variables)
+
+
+```
+
+  3.
+ -  ¿Siguen \ una \ \  distribución \  \  normal \ ? \\
+ \ Tablas \ \  de\ \  frecuencia \  \  y\   explicación
+
+a)Variables Cuantitativas
+
+```{r 3}
+
+
+# 1) Seleccionar únicamente las columnas numéricas (cuantitativas)
+# sapply(movies_2026, is.numeric) devuelve TRUE/FALSE por columna
+# y con eso filtramos las columnas numéricas.
+vars_num <- movies[, sapply(movies, is.numeric)]
+
+# 2) Crear una tabla donde guardaremos los resultados
+# variable: nombre de la columna
+# n: cantidad de valores NO-NA (datos válidos) que tiene esa variable
+# p_value: valor p del test de Shapiro–Wilk
+# normal: TRUE si p_value > 0.05, FALSE si p_value <= 0.05
+normalidad <- data.frame(
+  variable = names(vars_num),
+  n = NA,
+  p_value = NA,
+  normal = NA
+)
+
+# 3) Fijar una semilla para reproducibilidad
+# Esto hace que sample() seleccione siempre la misma muestra si vuelves a correr el script.
+set.seed(1)
+
+# 4) Recorrer cada variable numérica y aplicar el test
+for (i in seq_along(vars_num)) {
+
+  # 4.1) Tomar la columna i y quitar NAs
+  # na.omit elimina valores faltantes para evitar errores en la prueba
+  x <- na.omit(vars_num[[i]])
+
+  # Guardar cuántos datos válidos tiene la variable (antes de muestrear)
+  normalidad$n[i] <- length(x)
+
+  # 4.2) Validaciones mínimas antes de correr Shapiro
+  # - Shapiro necesita al menos 3 observaciones
+  if (length(x) < 3) next
+
+  # - Si todos los valores son iguales (varianza = 0), no tiene sentido probar normalidad
+  #   porque no hay distribución "real" que evaluar
+  if (length(unique(x)) < 2) next
+
+  # 4.3) Shapiro–Wilk solo permite hasta 5000 observaciones
+  # Si hay más, tomamos una muestra aleatoria de 5000 para poder correr el test
+  if (length(x) > 5000) {
+    x <- sample(x, 5000)
+  }
+
+  # 4.4) Ejecutar Shapiro de forma segura
+  # tryCatch evita que el script se detenga si una variable causa error
+  out <- tryCatch(
+    shapiro.test(x),
+    error = function(e) NULL
+  )
+
+  # 4.5) Si la prueba se ejecutó bien, guardamos resultados
+  if (!is.null(out)) {
+
+    # Guardar valor p del test
+    normalidad$p_value[i] <- out$p.value
+
+    # Decisión simple:
+    # p_value > 0.05  -> "compatible con normalidad" (no rechazo H0)
+    # p_value <= 0.05 -> "no normal" (rechazo H0)
+    normalidad$normal[i] <- out$p.value > 0.05
+  }
+}
+
+# 5) Mostrar la tabla final con resultados de normalidad
+normalidad
+```
+
+Para evaluar si las variables cuantitativas del conjunto de datos siguen una distribución normal, se aplicó la prueba de Shapiro--Wilk a cada una de ellas.
+Dado el tamaño de la muestra, se utilizó una submuestra aleatoria de 5000 valores, garantizando la reproducibilidad del análisis.
+
+Los resultados indican que todas las variables cuantitativas no siguen una distribución normal (p ≤ 0.05).
+Este comportamiento es especialmente evidente en las variables relacionadas con conteos y montos económicos, las cuales presentan distribuciones asimétricas con colas largas hacia la derecha.
+Algunas variables continuas, como la duración de las películas o el promedio de votos, muestran un comportamiento más cercano a la normalidad, aunque no completamente normal debido a la presencia de valores extremos y a la alta variabilidad de los datos.
+
+Debido a su naturaleza discreta y asimétrica, no es apropiado asumir normalidad para las variables de conteo, por lo que en análisis posteriores es recomendable emplear métodos no paramétricos o transformaciones adecuadas de los datos.
+
+b)Variables Cualitativas
+
+```{r 4}
+### 3b. Tablas de Frecuencia (Variables Cualitativas según clasificación)
+
+# 1. id (Cualitativa categórica ID) - Mostramos solo las primeras 10 para verificar
+cat("\nVariable: id (Top 10)\n")
+print(head(sort(table(movies$id), decreasing = TRUE), 10))
+
+# 2. genres
+cat("\nVariable: genres (Top 10 combinaciones)\n")
+print(head(sort(table(movies$genres), decreasing = TRUE), 10))
+
+# 3. homePage
+cat("\nVariable: homePage (Top 10)\n")
+print(head(sort(table(movies$homePage), decreasing = TRUE), 10))
+
+# 4. productionCompany
+cat("\nVariable: productionCompany (Top 10)\n")
+print(head(sort(table(movies$productionCompany), decreasing = TRUE), 10))
+
+# 5. productionCompanyCountry
+cat("\nVariable: productionCompanyCountry (Top 10)\n")
+print(head(sort(table(movies$productionCompanyCountry), decreasing = TRUE), 10))
+
+# 6. productionCountry
+cat("\nVariable: productionCountry (Top 10)\n")
+print(head(sort(table(movies$productionCountry), decreasing = TRUE), 10))
+
+# 7. video (Cualitativa binaria)
+cat("\nVariable: video (Binaria)\n")
+print(table(movies$video))
+
+# 8. director
+cat("\nVariable: director (Top 10)\n")
+print(head(sort(table(movies$director), decreasing = TRUE), 10))
+
+# 9. actors
+cat("\nVariable: actors (Top 10 combinaciones)\n")
+print(head(sort(table(movies$actors), decreasing = TRUE), 10))
+
+# 10. actorsPopularity (Nota: Aunque es numérica en esencia, la clasificaste como cualitativa)
+cat("\nVariable: actorsPopularity (Top 10)\n")
+print(head(sort(table(movies$actorsPopularity), decreasing = TRUE), 10))
+
+# 11. actorsCharacter
+cat("\nVariable: actorsCharacter (Top 10)\n")
+print(head(sort(table(movies$actorsCharacter), decreasing = TRUE), 10))
+
+# 12. originalTitle
+cat("\nVariable: originalTitle (Top 10)\n")
+print(head(sort(table(movies$originalTitle), decreasing = TRUE), 10))
+
+# 13. title
+cat("\nVariable: title (Top 10)\n")
+print(head(sort(table(movies$title), decreasing = TRUE), 10))
+
+# 14. originalLanguage
+cat("\nVariable: originalLanguage (Top 10)\n")
+print(head(sort(table(movies$originalLanguage), decreasing = TRUE), 10))
+
+# 15. releaseDate
+cat("\nVariable: releaseDate (Top 10)\n")
+print(head(sort(table(movies$releaseDate), decreasing = TRUE), 10))
+
+
+```
+
+1.  <u>Variables de Identificación y Dispersión (id, title, originalTitle) </u>
+
+> Observación: En estas variables, casi todas las frecuencias son 1.
+
+> Explicación: Esto es el comportamiento esperado para etiquetas de identificación únicas.
+> Confirma que el dataset no tiene registros duplicados significativos, aunque existen títulos genéricos como "Arena" o "Blackout" que se repiten un par de veces por ser nombres comunes para distintas producciones.
+
+2.  <u>Géneros y Contenido (genres)</u>
+
+> Dominancia: El género más frecuente es el Documental (1912), seguido por el Drama (1654) y la Comedia (1185).
+
+> Explicación: El dataset tiene un sesgo hacia contenido informativo o de no-ficción.
+> Las combinaciones de géneros (como "Comedy\|Drama") son menos frecuentes que los géneros puros.
+
+3.  <u>Presencia Web y Datos Faltantes (homePage, productionCompany, actors) </u>
+
+> Valores Vacíos: Existe una cantidad masiva de datos faltantes (campos en blanco "").
+> Por ejemplo, 8,476 películas no tienen homePage y 5,200 no listan una productionCompany.
+
+> Explicación: Esto indica que el dataset contiene muchas producciones independientes, antiguas o de bajo presupuesto que no tienen una huella digital estructurada o registros corporativos completos en la base de datos de origen.
+
+4.  <u>Distribución Geográfica y Lingüística (productionCountry, originalLanguage)</u>
+
+> Concentración: El idioma predominante es el Inglés (en: 4194), seguido a gran distancia por el Francés (fr: 824) y el Español (es: 814).
+
+> Producción: Estados Unidos (US) es el principal productor (850 películas identificadas), pero hay una gran presencia de países europeos y latinoamericanos (BR, FR, GB).
+
+> Explicación: Aunque el mercado anglosajón lidera, el dataset tiene una diversidad internacional considerable, especialmente de mercados europeos y brasileños.
+
+5.  <u>Personal y Reparto (director, actors, actorsCharacter)</u>
+
+> Director: La mayoría de los directores aparecen solo una vez (frecuencia 1), lo que muestra una gran diversidad de autores.
+
+> Actores: Un alto número de registros (2522) no tiene actores listados.
+> En actorsCharacter, el uso frecuente de la etiqueta "Self" refuerza la observación de que gran parte del contenido son documentales donde las personas aparecen como ellas mismas.
+
+6.  <u>Variable Binaria (video)</u>
+
+> Resultado: Todos los registros (9892) marcaron FALSE.
+
+> Explicación: Esta variable es "constante" en este set de datos.
+> Significa que ninguna de las entradas está clasificada específicamente como un "video" (posiblemente refiriéndose a material extra o formatos musicales), o que el campo no fue llenado para esta muestra.
+
+7.  <u>Fechas de Estreno (releaseDate)</u>
+
+> Tendencia: Las fechas con mayor frecuencia se concentran a finales de 2025 e inicios de 2026.
+
+> Explicación: Esto sugiere que el dataset está compuesto principalmente por estrenos recientes o futuros, funcionando como un catálogo de lanzamientos próximos.
+
+4. \ Responda\ las\ siguientes\ preguntas:
+
+4.1 \ —\ Top \ 10 \  \ películas \ \ con \ \ más \ \ presupuesto\\
+
+```{r 5}
+movies2 <- movies %>%
+  mutate(
+    # Convertir a numérico (maneja comas/dólares si existieran)
+    budget   = as.numeric(gsub("[^0-9.]", "", as.character(budget))),
+    revenue  = as.numeric(gsub("[^0-9.]", "", as.character(revenue))),
+    runtime  = as.numeric(gsub("[^0-9.]", "", as.character(runtime))),
+    voteAvg  = as.numeric(gsub("[^0-9.]", "", as.character(voteAvg))),
+    voteCount= as.numeric(gsub("[^0-9.]", "", as.character(voteCount))),
+    actorsAmount = as.numeric(gsub("[^0-9.]", "", as.character(actorsAmount))),
+    releaseYear  = as.numeric(gsub("[^0-9]", "", as.character(releaseYear))),
+    
+    # Fecha (por si releaseDate viene tipo "YYYY-MM-DD")
+    releaseDate = suppressWarnings(ymd(releaseDate))
+  )
+
+top10_budget <- movies2 %>%
+  filter(!is.na(budget)) %>%
+  arrange(desc(budget)) %>%
+  slice_head(n = 10) %>%
+  select(id, title, originalTitle, budget, releaseYear, genres, director)
+
+top10_budget
+
+
+```
+
+4.2 \ — \ Top\ 10 \ películas \ con \ más \ ingresos\ (\ revenue \ )
+
+```{r 6}
+top10_revenue <- movies2 %>%
+  filter(!is.na(revenue)) %>%
+  arrange(desc(revenue)) %>%
+  slice_head(n = 10) %>%
+  select(id, title, originalTitle, revenue, releaseYear, genres, director)
+
+top10_revenue
+```
+
+4.3 \ — \ Película \ con \ más \ votos \ ( \ voteCount \ )
+
+```{r 7}
+most_votes <- movies2 %>%
+  filter(!is.na(voteCount)) %>%
+  arrange(desc(voteCount)) %>%
+  slice_head(n = 1) %>%
+  select(id, title, originalTitle, voteCount, voteAvg, releaseYear, genres)
+
+most_votes
+```
+
+4.4 \ — \ Peor \ película \ según \ votos \ ( \ voteAvg \ más bajo \ )
+
+```{r 8}
+worst_movie <- movies2 %>%
+  filter(!is.na(voteAvg)) %>%
+  arrange(voteAvg, desc(voteCount)) %>%
+  slice_head(n = 1) %>%
+  select(id, title, originalTitle, voteAvg, voteCount, releaseYear, genres)
+
+worst_movie
+```
+
+4.5 ---  #  películas  por  año  +  año  con  más  películas  +  gráfico  de  barras
+
+```{r 9}
+movies_per_year <- movies2 %>%
+  filter(!is.na(releaseYear)) %>%
+  count(releaseYear, name = "n_movies") %>%
+  arrange(releaseYear)
+
+movies_per_year
+
+year_most_movies <- movies_per_year %>%
+  arrange(desc(n_movies)) %>%
+  slice_head(n = 1)
+
+year_most_movies
+
+ggplot(movies_per_year, aes(x = factor(releaseYear), y = n_movies)) +
+  geom_bar(stat = "identity") +
+  labs(
+    title = "Cantidad de películas por año",
+    x = "Año de lanzamiento",
+    y = "Número de películas"
+  ) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+```
+
+En 1995 se realizo 1 pelicula, en 2025 - 7351 peliculas y en 2026 - 37 peliculas. Por lo que el año con mayor peliculas fue el 2025.
+
+4.6 \ — \ Género \ principal \ de \ las \ 20 \ más \ recientes \ + \ género \ que \ predomina \ + \ gráfico
+
+```{r 10}
+movies2 <- movies2 %>%
+  mutate(
+    mainGenre = ifelse(
+      is.na(genres), NA,
+      str_trim(str_split_fixed(as.character(genres), "\\||,", 2)[,1])
+    )
+  )
+
+# 20 más recientes por releaseDate (si falta, usa releaseYear)
+recent20 <- movies2 %>%
+  mutate(order_date = ifelse(!is.na(releaseDate), as.numeric(releaseDate), NA_real_)) %>%
+  arrange(desc(releaseDate), desc(releaseYear)) %>%
+  slice_head(n = 20) %>%
+  select(id, title, releaseDate, releaseYear, mainGenre)
+
+recent20
+
+# Distribución de género principal en todo el dataset
+genre_counts <- movies2 %>%
+  filter(!is.na(mainGenre)) %>%
+  count(mainGenre, name = "n_movies") %>%
+  arrange(desc(n_movies))
+
+genre_counts
+
+dominant_genre <- genre_counts %>% slice_head(n = 1)
+dominant_genre
+
+ggplot(genre_counts %>% slice_head(n = 15), aes(x = reorder(mainGenre, n_movies), y = n_movies)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(
+    title = "Top 15 géneros principales más frecuentes",
+    x = "Género principal",
+    y = "Número de películas"
+  )
+
+# ¿A qué género pertenecen las películas más largas?
+# (Top 20 por runtime y revisamos su género principal)
+longest_movies <- movies2 %>%
+  filter(!is.na(runtime), !is.na(mainGenre)) %>%
+  arrange(desc(runtime)) %>%
+  slice_head(n = 20) %>%
+  select(id, title, runtime, mainGenre, releaseYear)
+
+longest_movies
+
+longest_genre_summary <- longest_movies %>%
+  count(mainGenre, name = "n_in_top20_longest") %>%
+  arrange(desc(n_in_top20_longest))
+
+longest_genre_summary
+```
+El genero principal de las 20 mas recientes es ciencia ficcion.
+
+El genero principal que predomina es el de comedia.
+
+El genero principal de las 20 peliculas mas largas no esta titulado, el que le sigue es accion como podemos ver en la tabla n_in_top20_longest. 
+
+4.7 \ — \ \ ¿Qué \ género \ principal \ obtuvo \ mayores \ ganancias \ ? 
+
+```{r 11}
+genre_profit <- movies2 %>%
+  filter(!is.na(mainGenre), !is.na(revenue)) %>%
+  group_by(mainGenre) %>%
+  summarise(
+    n = n(),
+    avg_revenue = mean(revenue, na.rm = TRUE),
+    med_revenue = median(revenue, na.rm = TRUE)
+  ) %>%
+  arrange(desc(avg_revenue))
+
+genre_profit
+
+top_genre_by_avg_rev <- genre_profit %>% slice_head(n = 1)
+top_genre_by_avg_rev
+
+ggplot(genre_profit %>% filter(n >= 30) %>% slice_head(n = 15),
+       aes(x = reorder(mainGenre, avg_revenue), y = avg_revenue)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(
+    title = "Top 15 géneros por ingreso promedio (filtrado: n>=30)",
+    x = "Género principal",
+    y = "Ingreso promedio (revenue)"
+  )
+```
+
+Ciencia ficcion con unas ganacias promedio de USD 1,088,5685
+
+4.8 ---  ¿actorsAmount  influye  en  revenue?
+
+```{r 12 }
+# (a) Relación actorsAmount vs revenue: correlación + scatter
+actors_rev <- movies2 %>%
+  filter(!is.na(actorsAmount), !is.na(revenue), actorsAmount > 0, revenue >= 0)
+
+cor_actors_revenue <- cor(actors_rev$actorsAmount, actors_rev$revenue, use = "complete.obs")
+cor_actors_revenue
+
+ggplot(actors_rev, aes(x = actorsAmount, y = revenue)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "lm", se = TRUE) +
+  labs(
+    title = "Relación entre cantidad de actores e ingresos",
+    x = "Cantidad de actores (actorsAmount)",
+    y = "Ingresos (revenue)"
+  )
+
+# (b) ¿Más actores en los últimos años? tendencia por año (promedio actores por releaseYear)
+actors_by_year <- movies2 %>%
+  filter(!is.na(releaseYear), !is.na(actorsAmount)) %>%
+  group_by(releaseYear) %>%
+  summarise(
+    n_movies = n(),
+    avg_actors = mean(actorsAmount, na.rm = TRUE),
+    med_actors = median(actorsAmount, na.rm = TRUE)
+  ) %>%
+  arrange(releaseYear)
+
+actors_by_year
+
+ggplot(actors_by_year, aes(x = releaseYear, y = avg_actors)) +
+  geom_line() +
+  geom_point() +
+  labs(
+    title = "Promedio de actores por año",
+    x = "Año",
+    y = "Promedio de actores (actorsAmount)"
+  )
+```
+Al comparar actorsAmount por año, 2025 presenta un promedio de 3.75 actores (mediana 3) y 2026 un promedio de 4.02 (mediana 3). Esto sugiere un ligero aumento en el promedio en 2026; sin embargo, la mediana permanece constante, por lo que la película típica sigue teniendo 3 actores y el incremento se explica por algunos casos con elencos más grandes. Además, no es posible inferir una tendencia temporal robusta porque el conjunto solo contiene 1995 (n=1), 2025 y 2026, y el valor de 1995 distorsiona la gráfica.
+
+
+
+4.9  -  ¿Cantidad  de  hombres  y  mujeres  influye  en  popularidad  e  ingresos?
+
+```{r 13 }
+##4.9
+# 1. Cálculo de todas las combinaciones de correlación
+cor_muj_pop <- cor(movies$castWomenAmount, movies$popularity, use = "complete.obs")
+cor_hom_pop <- cor(movies$castMenAmount, movies$popularity, use = "complete.obs")
+cor_muj_rev <- cor(movies$castWomenAmount, movies$revenue, use = "complete.obs")
+cor_hom_rev <- cor(movies$castMenAmount, movies$revenue, use = "complete.obs")
+
+# Mostrar resultados numéricos
+cat("--- Correlaciones con Popularidad ---",
+    "\nMujeres:", cor_muj_pop, "\nHombres:", cor_hom_pop,
+    "\n\n--- Correlaciones con Ingresos ---",
+    "\nMujeres:", cor_muj_rev, "\nHombres:", cor_hom_rev)
+
+# 2. Generación del tablero de gráficos (2 filas y 2 columnas)
+par(mfrow=c(2,2))
+
+# Fila 1: Impacto en Popularidad
+plot(movies$castWomenAmount, movies$popularity, main="Mujeres vs Popularidad", col="orchid", pch=16)
+abline(lm(popularity ~ castWomenAmount, data=movies), col="red")
+
+plot(movies$castMenAmount, movies$popularity, main="Hombres vs Popularidad", col="dodgerblue", pch=16)
+abline(lm(popularity ~ castMenAmount, data=movies), col="red")
+
+# Fila 2: Impacto en Ingresos
+plot(movies$castWomenAmount, movies$revenue, main="Mujeres vs Ingresos", col="orchid", pch=16)
+abline(lm(revenue ~ castWomenAmount, data=movies), col="darkgreen")
+
+plot(movies$castMenAmount, movies$revenue, main="Hombres vs Ingresos", col="dodgerblue", pch=16)
+abline(lm(revenue ~ castMenAmount, data=movies), col="darkgreen")
+
+# Resetear layout
+par(mfrow=c(1,1))
+
+```
+
+Como se puede observar tanto en las tablas como en el coeficiente de correlacion ni hombres ni mujeres tienen un impacto directo en que haya más o menos ingresos ni más o menos popularidad.
+
+4.10  -  ¿Quiénes  son  los  directores  de  las  20  películas  mejor  calificadas?
+
+```{r 14 }
+##4.10
+# 1. Ordenamos el dataset por calificación (voteAvg) de forma descendente
+# 2. Seleccionamos las primeras 20 filas
+# 3. Mostramos solo el título, el director y su calificación
+top_20_directores <- movies[order(-movies$voteAvg), c("title", "director", "voteAvg")]
+
+# Mostramos los primeros 20 resultados
+head(top_20_directores, 20)
+
+
+
+```
+
+Interpretación: La lista revela directores con calificaciones de 10.0, que es el máximo registrado en el dataset.
+Es probable que estos directores pertenezcan a producciones de nicho o cortometrajes, ya que un promedio perfecto suele darse en películas con muy pocos votos (voteCount).
+
+4.11  -  Correlación  presupuesto  vs  ingresos  (Histograma  y  Dispersión)
+
+```{r 15 }
+# 1. Cálculo del Coeficiente de Correlación
+# El resultado será un número entre -1 y 1
+coef_correlacion <- cor(movies$budget, movies$revenue, use = "complete.obs")
+
+cat("El coeficiente de correlación entre presupuesto e ingresos es:", coef_correlacion)
+
+# 2. Gráfico de Dispersión con línea de tendencia
+plot(movies$budget, movies$revenue, 
+     main = paste("Presupuesto vs Ingresos (Cor:", round(coef_correlacion, 2), ")"),
+     xlab = "Presupuesto", ylab = "Ingresos", 
+     col = "darkblue", pch = 16)
+abline(lm(revenue ~ budget, data = movies), col = "red", lwd = 2)
+
+# 3. Histograma de Presupuestos (para ver la distribución)
+hist(movies$budget, main = "Distribución de Presupuestos", 
+     xlab = "Presupuesto", col = "lightgreen", breaks = 50)
+
+
+
+```
+
+Interpretación: Aunque el sentido común dicta que a mayor inversión mayor ganancia, el gráfico de dispersión muestra mucha variabilidad.
+Dado que el 75% de las películas registran 0 en ambas categorías, el coeficiente de correlación se ve afectado por este sesgo de datos faltantes o nulos.
+
+4.12  -  ¿Se  asocian  meses  de  lanzamiento  con  mejores  ingresos?
+
+```{r 16 }
+# 1. Convertimos releaseDate a formato fecha y extraemos el mes
+movies$month <- as.numeric(format(as.Date(movies$releaseDate), "%m"))
+
+# 2. Agrupamos los ingresos por mes (promedio)
+# Usamos el promedio para que los meses con más estrenos no sesguen el resultado
+ingresos_mensuales <- aggregate(revenue ~ month, data = movies, FUN = mean)
+
+# 3. Creamos el gráfico para visualizar la asociación
+barplot(ingresos_mensuales$revenue, 
+        names.arg = month.abb[ingresos_mensuales$month], 
+        main = "Ingresos Promedio por Mes de Lanzamiento",
+        xlab = "Mes", 
+        ylab = "Ingresos Promedio", 
+        col = "darkorange")
+
+
+
+```
+
+Interpretación: Sí, existe una asociación clara y sumamente marcada entre el mes de lanzamiento y el desempeño financiero.
+El gráfico de "Ingresos Promedio por Mes" muestra que los ingresos son prácticamente inexistentes durante la mayor parte del año (febrero, marzo, mayo y agosto), pero experimentan un crecimiento masivo hacia el final del año.
+
+4.13  -  Meses  con  mejores  ingresos  y  promedio  de  lanzamientos  mensual
+
+```{r 17 }
+# 1. Aseguramos la extracción del mes (01-12) a partir de la fecha de lanzamiento
+movies$month <- as.numeric(format(as.Date(movies$releaseDate), "%m"))
+
+# 2. Calculamos los ingresos totales acumulados por cada mes
+ingresos_tot_mes <- aggregate(revenue ~ month, data = movies, FUN = sum)
+
+# 3. Ordenamos de mayor a menor para identificar los meses más rentables
+meses_top_ingresos <- ingresos_tot_mes[order(-ingresos_tot_mes$revenue), ]
+
+# 4. Mostramos la tabla de ingresos por mes
+cat("Tabla de ingresos totales por mes (Orden descendente):\n")
+print(meses_top_ingresos)
+
+# 5. Calculamos el promedio de lanzamientos mensuales
+tabla_meses <- table(movies$month)
+promedio_lanzamientos <- mean(tabla_meses)
+
+# 6. Mostramos el resultado del promedio
+cat("\nEl promedio de películas lanzadas por mes es:", promedio_lanzamientos)
+
+
+```
+
+Interpretación: Sí, existe una asociación muy marcada.
+Según los datos, los meses de fin de año (diciembre y noviembre) y el inicio de año (enero) son los únicos que generan ingresos significativos en este conjunto de datos.
+El resto de los meses registrados (febrero, marzo, mayo y agosto) muestran ingresos prácticamente nulos o iguales a cero.
+4.14  -  ¿Cómo  se  correlacionan  las  calificaciones  con  el  éxito  comercial?
+
+```{r 18 }
+# 1. Calculamos el coeficiente de correlación de Pearson
+cor_calif_ingresos <- cor(movies$voteAvg, movies$revenue, use = "complete.obs")
+
+cat("El coeficiente de correlación entre calificación e ingresos es:", cor_calif_ingresos)
+
+# 2. Creamos un diagrama de dispersión para visualizar la relación
+plot(movies$voteAvg, movies$revenue, 
+     main = paste("Calificación vs Éxito Comercial (r =", round(cor_calif_ingresos, 4), ")"),
+     xlab = "Calificación Promedio (voteAvg)", 
+     ylab = "Ingresos (revenue)", 
+     col = "darkmagenta", 
+     pch = 16)
+
+# 3. Agregamos la línea de tendencia
+abline(lm(revenue ~ voteAvg, data = movies), col = "red", lwd = 2)
+
+
+
+```
+
+"La correlación de 0.0466 demuestra que el éxito comercial es independiente de la calificación de los usuarios. Factores como el marketing, el presupuesto o la fecha de estreno (como vimos en la 4.12 y 4.13) parecen ser mucho más determinantes para los ingresos que la puntuación promedio de la película".
+
+4.15  -  Estrategias  de  marketing:  ¿Videos  o  páginas  oficiales?
+
+```{r 19 }
+# 1. Crear una variable lógica: TRUE si tiene página, FALSE si está vacía
+movies$tiene_pagina <- movies$homePage != ""
+
+# 2. Comparar el promedio de ingresos y popularidad según si tienen página o no
+marketing_analisis <- aggregate(cbind(revenue, popularity) ~ tiene_pagina, 
+                                data = movies, FUN = mean)
+
+cat("Comparación de resultados según estrategia de marketing (Página Web):\n")
+print(marketing_analisis)
+
+# 3. Visualización con un gráfico de barras para Ingresos
+barplot(marketing_analisis$revenue, 
+        names.arg = c("Sin Página", "Con Página"), 
+        col = c("tomato", "steelblue"),
+        main = "Impacto de Página Web en Ingresos Promedio",
+        ylab = "Ingresos Promedio")
+
+
+
+```
+
+Impacto en Ingresos: Las películas que cuentan con una página oficial (TRUE) tienen un ingreso promedio de 3,307,419.06, comparado con los apenas 49,531.52 de las que no tienen (FALSE).
+Esto significa que tener una página web se asocia con ingresos 66 veces mayores en promedio.
+
+Impacto en Popularidad: La popularidad promedio también salta de 0.34 a 3.75 cuando existe una página oficial, lo que representa un incremento de más de 10 veces en el interés del público.
+
+4.16  -  ¿Correlación  entre  popularidad  del  elenco  y  éxito  de  taquilla?
+
+```{r 20 }
+# 1. Limpieza: La columna actorsPopularity contiene textos con números (ej. "10.5, 8.2"). 
+# Extraeremos el promedio numérico de popularidad por película.
+# Nota: Este paso asume que separaremos los números de la cadena de texto.
+
+# Función rápida para obtener el promedio de la cadena de popularidad
+get_avg_pop <- function(x) {
+  nums <- as.numeric(unlist(regmatches(x, gregexpr("[0-9.]+", x))))
+  if(length(nums) > 0) return(mean(nums)) else return(0)
+}
+
+movies$avg_actors_pop <- sapply(movies$actorsPopularity, get_avg_pop)
+
+# 2. Cálculo de la correlación de Pearson
+cor_elenco_revenue <- cor(movies$avg_actors_pop, movies$revenue, use = "complete.obs")
+
+cat("Correlación entre Popularidad del Elenco e Ingresos:", cor_elenco_revenue)
+
+# 3. Gráfico de dispersión
+plot(movies$avg_actors_pop, movies$revenue, 
+     main = paste("Popularidad Elenco vs Taquilla (r =", round(cor_elenco_revenue, 4), ")"),
+     xlab = "Popularidad Promedio del Elenco", 
+     ylab = "Ingresos (Revenue)", 
+     col = "darkcyan", pch = 16)
+abline(lm(revenue ~ avg_actors_pop, data = movies), col = "red", lwd = 2)
+
+
+
+```
+
+Existe una correlación muy débil (r = 0.1097).
+Aunque la línea de tendencia muestra una ligera inclinación positiva, el gráfico revela que muchos elencos con alta popularidad (puntos a la derecha en el eje X) siguen teniendo ingresos de cero.
+
+IMPORTANTE Se identificó que la variable revenue presenta un sesgo masivo, con un 98.2% de valores en cero (9,713 registros).
+Por lo tanto, los análisis de rentabilidad y éxito comercial del dataset se basan únicamente en un pequeño subconjunto de películas (\~1.8%) que sí reportaron ingresos significativos, concentrados principalmente en los meses de noviembre, diciembre y enero".
+
+```{r 21 }
+# 1. Ver los 20 valores de ingresos más frecuentes
+# cuántas películas tienen "0" o "1"
+table(head(sort(table(movies$revenue), decreasing = TRUE), 20))
+
+# 2. Ver las 10 películas con mayores ingresos (distintos a 0)
+head(movies[order(-movies$revenue), c("title", "revenue")], 10)
+# 3. Resumen estadístico detallado
+summary(movies$revenue)
+
+```
